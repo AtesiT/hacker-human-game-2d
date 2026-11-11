@@ -16,11 +16,12 @@ const NOTE_STEP = 32;
 const NOTE_HOLD = 1400;
 const NOTE_FADE = 500;
 
-/** Постоянные элементы интерфейса поверх комнаты: деньги, уведомления, таймер заказа, подсказка. */
+/** Постоянные элементы интерфейса поверх комнаты: деньги, уведомления, таймер заказа, подсказки. */
 export class Hud {
   private readonly money: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
   private readonly order: Phaser.GameObjects.Text;
+  private readonly saved: Phaser.GameObjects.Text;
   /** Какие строки столбика уведомлений сейчас заняты. */
   private readonly noteRows: boolean[] = [];
   /** Что сейчас показано в подсказке: по этому ключу видно, изменилась ли она. */
@@ -30,6 +31,11 @@ export class Hud {
     this.money = this.label(MARGIN, MARGIN, UI.accent);
     this.hint = this.label(VIEW_W / 2, VIEW_H - MARGIN, DB32.white).setOrigin(0.5, 1).setVisible(false);
     this.order = this.label(VIEW_W - MARGIN, MARGIN, DB32.white).setOrigin(1, 0).setVisible(false);
+    this.saved = scene.add
+      .text(MARGIN, VIEW_H - MARGIN, '', { ...textStyle(8, UI.text), backgroundColor: TEXT_BACKING, padding: { x: 6, y: 4 } })
+      .setOrigin(0, 1)
+      .setDepth(UI_DEPTH.hud)
+      .setAlpha(0);
   }
 
   setMoney(amount: number): void {
@@ -61,6 +67,14 @@ export class Hud {
   /** Заказ в работе и его таймер — в правом верхнем углу. Пустая строка их убирает. */
   setOrder(text: string): void {
     this.order.setText(text).setVisible(text !== '');
+  }
+
+  /** Мелкая отметка в углу: игра сохранилась (или сохранить не вышло). Гаснет сама. */
+  showSaved(ok: boolean): void {
+    this.saved.setText(ok ? 'СОХРАНЕНО' : 'НЕ УДАЛОСЬ СОХРАНИТЬ').setColor(css(ok ? UI.text : UI.bad));
+    this.scene.tweens.killTweensOf(this.saved);
+    this.saved.setAlpha(1);
+    this.scene.tweens.add({ targets: this.saved, alpha: 0, delay: 1200, duration: 400 });
   }
 
   /** Подсказка внизу экрана. Пустая строка её убирает. */

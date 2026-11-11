@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { tilesOf } from '../data/assets';
-import { START_MONEY, TILE, ZOOM } from '../data/config';
+import { AUTOSAVE_PERIOD, PLAYER_HITBOX, START_MONEY, TILE, ZOOM } from '../data/config';
 import { DEVICES, type DeviceKind } from '../data/devices';
+import { DB32 } from '../data/palette';
 import { FURNITURE, ROOM_COLS, ROOM_MAP, ROOM_ROWS, SPAWN, TILE_FLOOR, TILE_WALL } from '../data/room';
 import { Device } from '../entities/Device';
 import { Furniture } from '../entities/Furniture';
@@ -12,6 +13,7 @@ import { Economy } from '../systems/Economy';
 import { Grid } from '../systems/Grid';
 import { Interaction } from '../systems/Interaction';
 import { Orders } from '../systems/Orders';
+import { loadSave, resetIfRequested, writeSave, type SaveData } from '../systems/Save';
 import { clock, signedMoney } from '../ui/format';
 import type { Hud } from '../ui/Hud';
 import { ordersTab, shopTab } from '../ui/tabs';
@@ -49,7 +51,10 @@ export class RoomScene extends Phaser.Scene {
     this.hud = ui.hud;
     this.terminal = ui.terminal;
 
-    this.economy = new Economy(START_MONEY, (money, delta) => {
+    const wasReset = resetIfRequested();
+    const save = loadSave();
+
+    this.economy = new Economy(save?.money ?? START_MONEY, (money, delta) => {
       this.hud.setMoney(money);
       this.hud.notify(signedMoney(delta), delta < 0 ? UI.bad : UI.good);
       // От баланса зависит, что можно купить: открытый магазин нужно перерисовать.
@@ -79,6 +84,14 @@ export class RoomScene extends Phaser.Scene {
       shopTab(this.economy, (kind) => this.startBuild(kind)),
       ordersTab(this.orders),
     ]);
+
+    if (save) {
+      this.restore(save);
+      this.hud.notify('ИГРА ЗАГРУЖЕНА', DB32.white);
+    } else if (wasReset) {
+      this.hud.notify('ПРОГРЕСС СБРОШЕН', DB32.white);
+    }
+    this.setupAutosave();
   }
 
   override update(_time: number, delta: number): void {
@@ -165,6 +178,8 @@ export class RoomScene extends Phaser.Scene {
     this.economy.add(-DEVICES[kind].price);
     this.addDevice(kind, area.tx, area.ty);
     this.setMode('walk');
+    // Покупка — самое ценное, что можно потерять, поэтому сохраняемся сразу.
+    this.save();
   }
 
   private addDevice(kind: DeviceKind, tx: number, ty: number): Device {
@@ -173,6 +188,52 @@ export class RoomScene extends Phaser.Scene {
     this.grid.occupy({ tx, ty, ...tilesOf(DEVICES[kind].asset) });
     this.economy.devices.push(device);
     return device;
+  }
+
+  private setupAutosave(): void {
+    this.time.addEvent({ delay: AUTOSAVE_PERIOD, loop: true, callback: () => this.save() });
+
+    // Ещё одно сохранение — когда вкладку закрывают, перезагружают или сворачивают:
+    // так не теряется то, что случилось после последнего автосохранения.
+    window.addEventListener('pagehide', () => this.save());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.save();
+    });
+  }
+
+  private save(): void {
+    const ok = writeSave({
+      money: this.economy.money,
+      player: { x: Math.round(this.player.x), y: Math.round(this.player.y) },
+      devices: this.economy.devices.map(({ kind, tx, ty, elapsed }) => ({
+        kind,
+        tx,
+        ty,
+        elapsed: Math.round(elapsed),
+      })),
+    });
+    this.hud.showSaved(ok);
+  }
+
+  /** Расставляет по комнате то, что было в сохранении. Деньги из него уже взяты при создании экономики. */
+  private restore(save: SaveData): void {
+    for (const { kind, tx, ty, elapsed } of save.devices) {
+      const def = DEVICES[kind];
+      // Сохранение могло остаться от версии игры с другой комнатой или другими лимитами.
+      // Устройство, которому теперь нет места, просто не ставится.
+      const fits = this.grid.isFree({ tx, ty, ...tilesOf(def.asset) });
+      if (!fits || this.economy.count(kind) >= def.max) continue;
+      this.addDevice(kind, tx, ty).elapsed = elapsed;
+    }
+
+    // По той же причине игрок возвращается на сохранённое место, только если оно свободно.
+    const { x, y } = save.player;
+    const half = PLAYER_HITBOX / 2;
+    const tx = Math.floor((x - half) / TILE);
+    const ty = Math.floor((y - half) / TILE);
+    const w = Math.ceil((x + half) / TILE) - tx;
+    const h = Math.ceil((y + half) / TILE) - ty;
+    if (this.grid.isFree({ tx, ty, w, h })) this.player.teleport(x, y);
   }
 
   private createRoom(): void {

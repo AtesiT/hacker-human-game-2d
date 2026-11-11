@@ -34,6 +34,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
+  /** Мгновенно переносит игрока в точку: вместе со спрайтом двигается и физическое тело. */
+  teleport(x: number, y: number): void {
+    (this.body as Phaser.Physics.Arcade.Body).reset(x, y);
+  }
+
   /** Хитбокс в координатах мира. */
   hitbox(): Phaser.Geom.Rectangle {
     const body = this.body as Phaser.Physics.Arcade.Body;
