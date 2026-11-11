@@ -11,9 +11,10 @@ import { Controls, type Action } from '../systems/Controls';
 import { Economy } from '../systems/Economy';
 import { Grid } from '../systems/Grid';
 import { Interaction } from '../systems/Interaction';
-import { signedMoney } from '../ui/format';
+import { Orders } from '../systems/Orders';
+import { clock, signedMoney } from '../ui/format';
 import type { Hud } from '../ui/Hud';
-import { shopTab } from '../ui/tabs';
+import { ordersTab, shopTab } from '../ui/tabs';
 import type { Terminal } from '../ui/Terminal';
 import { UI } from '../ui/theme';
 import type { UIScene } from './UIScene';
@@ -28,6 +29,9 @@ export class RoomScene extends Phaser.Scene {
   private economy!: Economy;
   private grid!: Grid;
   private interaction!: Interaction;
+  private orders!: Orders;
+  /** Строка с таймером заказа, которая сейчас на экране. */
+  private orderText = '';
   private player!: Player;
   /** Всё, сквозь что игрок не проходит: сплошная мебель и устройства. */
   private solids!: Phaser.Physics.Arcade.StaticGroup;
@@ -53,6 +57,15 @@ export class RoomScene extends Phaser.Scene {
     });
     this.hud.setMoney(this.economy.money);
 
+    this.orders = new Orders((reward) => {
+      if (reward > 0) {
+        this.hud.notify('ЗАКАЗ ВЫПОЛНЕН', UI.good);
+        this.economy.add(reward);
+      } else {
+        this.hud.notify('ЗАКАЗ ПРОВАЛЕН', UI.bad);
+      }
+    });
+
     this.mode = 'walk';
     this.controls = new Controls(this, (action) => this.onAction(action));
     this.interaction = new Interaction(this);
@@ -64,13 +77,15 @@ export class RoomScene extends Phaser.Scene {
 
     this.terminal.setTabs([
       shopTab(this.economy, (kind) => this.startBuild(kind)),
-      { title: 'ЗАКАЗЫ', verb: 'ВЗЯТЬ', rows: () => [] },
+      ordersTab(this.orders),
     ]);
   }
 
   override update(_time: number, delta: number): void {
     this.controls.update(delta);
     this.economy.update(delta);
+    this.orders.update(delta);
+    this.updateOrderTimer();
 
     const walking = this.mode === 'walk';
     const dir = walking ? this.controls.direction() : { x: 0, y: 0 };
@@ -114,6 +129,16 @@ export class RoomScene extends Phaser.Scene {
   private updateInteraction(): void {
     if (this.mode === 'walk') this.interaction.update(this.player.x, this.player.y);
     else this.interaction.clear();
+  }
+
+  /** Таймер заказа в HUD и в открытом терминале. Перерисовывается, только когда сменилась секунда. */
+  private updateOrderTimer(): void {
+    const order = this.orders.active;
+    const text = order ? `${order.def.name} ${clock(order.left)}` : '';
+    if (text === this.orderText) return;
+    this.orderText = text;
+    this.hud.setOrder(text);
+    this.terminal.refresh();
   }
 
   private updateHint(): void {

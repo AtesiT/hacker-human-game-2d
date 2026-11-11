@@ -1,6 +1,8 @@
 import { DEVICES, DEVICE_KINDS, type DeviceKind } from '../data/devices';
+import { ORDERS } from '../data/orders';
 import type { Economy } from '../systems/Economy';
-import { money } from './format';
+import type { Orders } from '../systems/Orders';
+import { clock, money } from './format';
 import type { TerminalTab } from './Terminal';
 
 /**
@@ -29,6 +31,28 @@ export function shopTab(economy: Economy, onBuy: (kind: DeviceKind) => void): Te
           detail: `ДОХОД ${money(def.income)}/МИН${expense} · КУПЛЕНО ${owned} ИЗ ${def.max}`,
           blocked,
           run: () => onBuy(kind),
+        };
+      }),
+  };
+}
+
+/** Заказы: по строке на каждый шаблон. Взять можно один заказ за раз. */
+export function ordersTab(orders: Orders): TerminalTab {
+  return {
+    title: 'ЗАКАЗЫ',
+    verb: 'ВЗЯТЬ',
+    rows: () =>
+      ORDERS.map((def) => {
+        const active = orders.active;
+        const running = active?.def === def;
+        return {
+          title: def.name,
+          value: `${money(def.rewardMin)}-${def.rewardMax}`,
+          detail: running
+            ? `ВЫПОЛНЯЕТСЯ - ОСТАЛОСЬ ${clock(active.left)}`
+            : `${def.duration / 1000} СЕК · ШАНС ${Math.round(def.chance * 100)}%`,
+          blocked: active && !running ? 'СНАЧАЛА ЗАКОНЧИТЕ ТЕКУЩИЙ ЗАКАЗ' : undefined,
+          run: () => orders.accept(def),
         };
       }),
   };
