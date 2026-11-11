@@ -3,6 +3,7 @@ import { DB32 } from './palette';
 /** Ключ ассета: он же ключ текстуры в Phaser и имя файла спрайта. */
 export type AssetKey =
   | 'tiles'
+  | 'player'
   | 'window'
   | 'door'
   | 'desk'
@@ -21,7 +22,7 @@ export interface AssetDef {
   rows?: number;
   /**
    * Цвета заглушки из DB32: [заливка, обводка].
-   * У тайлсета — по такой паре на каждый тайл подряд.
+   * У тайлсета — по такой паре на каждый тайл подряд, у игрока третий цвет — «лицо».
    */
   colors: number[];
   /** Подпись поверх заглушки. */
@@ -43,6 +44,17 @@ export const ASSETS: Record<AssetKey, AssetDef> = {
     frameH: 16,
     cols: 2,
     colors: [DB32.oiledCedar, DB32.loulou, DB32.dimGray, DB32.smokeyAsh],
+  },
+
+  // Игрок: 4 ряда по направлению взгляда (вниз, влево, вправо, вверх) × 4 кадра шага.
+  // Первый кадр ряда — он же поза «стоит».
+  player: {
+    frameW: 16,
+    frameH: 24,
+    cols: 4,
+    rows: 4,
+    colors: [DB32.royalBlue, DB32.deepKoamaru, DB32.pancho],
+    label: 'ИГРОК',
   },
 
   // Мебель и детали комнаты. Размер кадра кратен тайлу: 48×32 — это 3×2 тайла.
