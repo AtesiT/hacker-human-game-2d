@@ -24,6 +24,9 @@ import type { UIScene } from './UIScene';
 /** Чем сейчас управляют клавиши: ходьбой, окном терминала или расстановкой устройства. */
 type Mode = 'walk' | 'terminal' | 'build';
 
+/** Подсказка об управлении для того, кто видит игру впервые. */
+const INTRO_HINT = 'WASD/СТРЕЛКИ - ХОДИТЬ   E У СТОЛА - ТЕРМИНАЛ';
+
 /** Игровой мир: комната и всё, что в ней находится. Здесь же связаны системы игры. */
 export class RoomScene extends Phaser.Scene {
   private build!: BuildMode;
@@ -40,6 +43,8 @@ export class RoomScene extends Phaser.Scene {
   private hud!: Hud;
   private terminal!: Terminal;
   private mode: Mode = 'walk';
+  /** Показывать ли вводную подсказку: да — в новой игре, пока игрок не открыл терминал. */
+  private showIntro = false;
 
   constructor() {
     super('Room');
@@ -53,6 +58,7 @@ export class RoomScene extends Phaser.Scene {
 
     const wasReset = resetIfRequested();
     const save = loadSave();
+    this.showIntro = save === null;
 
     this.economy = new Economy(save?.money ?? START_MONEY, (money, delta) => {
       this.hud.setMoney(money);
@@ -71,7 +77,6 @@ export class RoomScene extends Phaser.Scene {
       }
     });
 
-    this.mode = 'walk';
     this.controls = new Controls(this, (action) => this.onAction(action));
     this.interaction = new Interaction(this);
     this.grid = new Grid();
@@ -130,8 +135,12 @@ export class RoomScene extends Phaser.Scene {
     this.mode = mode;
     // Клавиша, зажатая в прошлом режиме, не должна сразу листать меню или двигать контур.
     this.controls.waitForRelease();
-    if (mode === 'terminal') this.terminal.open();
-    else this.terminal.close();
+    if (mode === 'terminal') {
+      this.terminal.open();
+      this.showIntro = false;
+    } else {
+      this.terminal.close();
+    }
     if (mode !== 'build') this.build.stop();
     // Объект рядом с игроком ищется сразу, а не на следующем кадре:
     // иначе E, нажатая сразу после Esc, ни на что бы не попала.
@@ -161,7 +170,8 @@ export class RoomScene extends Phaser.Scene {
       this.hud.setHint(text, problem ? UI.bad : undefined);
     } else {
       const target = this.interaction.target;
-      this.hud.setHint(target ? `[E] ${target.hint}` : '');
+      if (target) this.hud.setHint(`[E] ${target.hint}`);
+      else this.hud.setHint(this.showIntro ? INTRO_HINT : '');
     }
   }
 

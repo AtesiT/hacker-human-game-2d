@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { VIEW_H, VIEW_W } from '../data/config';
-import { DB32, css } from '../data/palette';
+import { DB32 } from '../data/palette';
 import type { Action } from '../systems/Controls';
-import { UI, UI_DEPTH, textStyle } from './theme';
+import { UI, UI_DEPTH, setLabel, textStyle } from './theme';
 
 /** Строка списка в терминале. */
 export interface TerminalRow {
@@ -49,6 +49,8 @@ interface RowView {
 export class Terminal {
   private readonly root: Phaser.GameObjects.Container;
   private readonly tabsRoot: Phaser.GameObjects.Container;
+  /** Плашка под названием активной вкладки. */
+  private readonly tabPlate: Phaser.GameObjects.Rectangle;
   private readonly rowViews: RowView[] = [];
   private readonly empty: Phaser.GameObjects.Text;
   private readonly footer: Phaser.GameObjects.Text;
@@ -70,12 +72,13 @@ export class Terminal {
       .setOrigin(0);
     const divider = add.rectangle(X + PAD, Y + 56, W - PAD * 2, 2, UI.textDim).setOrigin(0);
 
+    this.tabPlate = add.rectangle(0, 0, 1, 1, UI.text).setOrigin(0).setVisible(false);
     this.tabsRoot = add.container(0, 0);
     this.empty = add.text(VIEW_W / 2, ROWS_TOP + 64, 'ПУСТО', textStyle(16, UI.disabled)).setOrigin(0.5);
     this.footer = add.text(X + PAD, Y + H - PAD, '', textStyle(8, UI.textDim)).setOrigin(0, 1);
 
     this.root = add
-      .container(0, 0, [backdrop, frame, panel, divider, this.tabsRoot, this.empty, this.footer])
+      .container(0, 0, [backdrop, frame, panel, divider, this.tabPlate, this.tabsRoot, this.empty, this.footer])
       .setDepth(UI_DEPTH.terminal)
       .setVisible(false);
 
@@ -164,8 +167,10 @@ export class Terminal {
     this.tabTitles.forEach((title, i) => {
       // Активная вкладка — «инверсией»: тёмный текст на зелёной плашке.
       const active = i === this.tabIndex;
-      title.setColor(css(active ? UI.panel : UI.text));
-      title.setBackgroundColor(active ? css(UI.text) : 'rgba(0, 0, 0, 0)');
+      setLabel(title, title.text, active ? UI.panel : UI.text);
+      if (active) {
+        this.tabPlate.setPosition(title.x, title.y).setSize(title.width, title.height).setVisible(true);
+      }
     });
 
     this.rowViews.forEach((view, i) => {
@@ -178,13 +183,10 @@ export class Terminal {
       if (!row) return;
 
       const blocked = row.blocked !== undefined;
-      view.title.setText(`${selected ? '>' : ' '} ${row.title}`);
-      view.title.setColor(css(blocked ? UI.disabled : UI.text));
-      view.value.setText(row.value);
-      view.value.setColor(css(blocked ? UI.disabled : UI.accent));
+      setLabel(view.title, `${selected ? '>' : ' '} ${row.title}`, blocked ? UI.disabled : UI.text);
+      setLabel(view.value, row.value, blocked ? UI.disabled : UI.accent);
       // У недоступной строки вместо пояснения показана причина.
-      view.detail.setText(row.blocked ?? row.detail);
-      view.detail.setColor(css(blocked ? UI.bad : UI.textDim));
+      setLabel(view.detail, row.blocked ?? row.detail, blocked ? UI.bad : UI.textDim);
     });
 
     this.empty.setVisible(this.rows.length === 0);
