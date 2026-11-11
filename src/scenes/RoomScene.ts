@@ -1,12 +1,15 @@
 import Phaser from 'phaser';
-import { TILE, ZOOM } from '../data/config';
+import { START_MONEY, TILE, ZOOM } from '../data/config';
 import { FURNITURE, ROOM_COLS, ROOM_MAP, ROOM_ROWS, SPAWN, TILE_FLOOR, TILE_WALL } from '../data/room';
 import { Furniture } from '../entities/Furniture';
 import { Player } from '../entities/Player';
 import { Controls, type Action } from '../systems/Controls';
+import { Economy } from '../systems/Economy';
 import { Interaction } from '../systems/Interaction';
+import { signedMoney } from '../ui/format';
 import type { Hud } from '../ui/Hud';
 import type { Terminal } from '../ui/Terminal';
+import { UI } from '../ui/theme';
 import type { UIScene } from './UIScene';
 
 /** Чем сейчас управляют клавиши: ходьбой или окном терминала. */
@@ -15,6 +18,7 @@ type Mode = 'walk' | 'terminal';
 /** Игровой мир: комната и всё, что в ней находится. Здесь же связаны системы игры. */
 export class RoomScene extends Phaser.Scene {
   private controls!: Controls;
+  private economy!: Economy;
   private interaction!: Interaction;
   private player!: Player;
   private hud!: Hud;
@@ -34,6 +38,14 @@ export class RoomScene extends Phaser.Scene {
       { title: 'МАГАЗИН', verb: 'КУПИТЬ', rows: () => [] },
       { title: 'ЗАКАЗЫ', verb: 'ВЗЯТЬ', rows: () => [] },
     ]);
+
+    this.economy = new Economy(START_MONEY, (money, delta) => {
+      this.hud.setMoney(money);
+      this.hud.notify(signedMoney(delta), delta < 0 ? UI.bad : UI.good);
+      // От баланса зависит, что можно купить: открытый магазин нужно перерисовать.
+      this.terminal.refresh();
+    });
+    this.hud.setMoney(this.economy.money);
 
     this.mode = 'walk';
     this.controls = new Controls(this, (action) => this.onAction(action));
