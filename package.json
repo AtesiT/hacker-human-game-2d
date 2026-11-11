@@ -1,0 +1,27 @@
+{
+  "name": "hacker-human-game-2d",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Пиксельная top-down игра про хакера в одной комнате. TypeScript + Vite + Phaser 3.",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "predev": "node scripts/ensure-deps.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/ensure-deps.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/press-start-2p": "^5.3.0",
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}
