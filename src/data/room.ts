@@ -38,6 +38,8 @@ export interface FurnitureDef {
   ty: number;
   /** Сплошной предмет: сквозь него не пройти и на его место ничего не поставить. */
   solid: boolean;
+  /** Что открывается по клавише E рядом с предметом. */
+  opens?: 'terminal';
 }
 
 export const FURNITURE: FurnitureDef[] = [
@@ -48,7 +50,7 @@ export const FURNITURE: FurnitureDef[] = [
 
   { asset: 'bed', tx: 1, ty: 1, solid: true },
   { asset: 'shelf', tx: 3, ty: 1, solid: true },
-  { asset: 'desk', tx: 10, ty: 1, solid: true },
+  { asset: 'desk', tx: 10, ty: 1, solid: true, opens: 'terminal' },
   { asset: 'fridge', tx: 22, ty: 1, solid: true },
   { asset: 'couch', tx: 18, ty: 14, solid: true },
   { asset: 'rug', tx: 10, ty: 7, solid: false },

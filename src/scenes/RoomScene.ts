@@ -3,27 +3,75 @@ import { TILE, ZOOM } from '../data/config';
 import { FURNITURE, ROOM_COLS, ROOM_MAP, ROOM_ROWS, SPAWN, TILE_FLOOR, TILE_WALL } from '../data/room';
 import { Furniture } from '../entities/Furniture';
 import { Player } from '../entities/Player';
-import { Controls } from '../systems/Controls';
+import { Controls, type Action } from '../systems/Controls';
+import { Interaction } from '../systems/Interaction';
+import type { Hud } from '../ui/Hud';
+import type { Terminal } from '../ui/Terminal';
+import type { UIScene } from './UIScene';
 
-/** Игровой мир: комната и всё, что в ней находится. */
+/** Чем сейчас управляют клавиши: ходьбой или окном терминала. */
+type Mode = 'walk' | 'terminal';
+
+/** Игровой мир: комната и всё, что в ней находится. Здесь же связаны системы игры. */
 export class RoomScene extends Phaser.Scene {
   private controls!: Controls;
+  private interaction!: Interaction;
   private player!: Player;
+  private hud!: Hud;
+  private terminal!: Terminal;
+  private mode: Mode = 'walk';
 
   constructor() {
     super('Room');
   }
 
   create(): void {
-    this.controls = new Controls(this);
+    // Сцена интерфейса к этому моменту уже создана (см. BootScene).
+    const ui = this.scene.get('UI') as UIScene;
+    this.hud = ui.hud;
+    this.terminal = ui.terminal;
+    this.terminal.setTabs([
+      { title: 'МАГАЗИН', verb: 'КУПИТЬ', rows: () => [] },
+      { title: 'ЗАКАЗЫ', verb: 'ВЗЯТЬ', rows: () => [] },
+    ]);
+
+    this.mode = 'walk';
+    this.controls = new Controls(this, (action) => this.onAction(action));
+    this.interaction = new Interaction(this);
     this.player = new Player(this, SPAWN.x, SPAWN.y);
     this.createRoom();
     this.setupCamera();
   }
 
-  override update(): void {
-    const dir = this.controls.direction();
+  override update(_time: number, delta: number): void {
+    this.controls.update(delta);
+
+    const walking = this.mode === 'walk';
+    const dir = walking ? this.controls.direction() : { x: 0, y: 0 };
     this.player.move(dir.x, dir.y);
+
+    if (walking) this.interaction.update(this.player.x, this.player.y);
+    else this.interaction.clear();
+    const target = this.interaction.target;
+    this.hud.setHint(target ? `[E] ${target.hint}` : '');
+  }
+
+  /** Одно нажатие клавиши. Что оно значит, зависит от режима. */
+  private onAction(action: Action): void {
+    if (this.mode === 'walk') {
+      if (action === 'confirm') this.interaction.target?.interact();
+    } else if (action === 'cancel') {
+      this.setMode('walk');
+    } else {
+      this.terminal.handle(action);
+    }
+  }
+
+  private setMode(mode: Mode): void {
+    this.mode = mode;
+    this.controls.waitForRelease();
+    if (mode === 'terminal') this.terminal.open();
+    else this.terminal.close();
   }
 
   private createRoom(): void {
@@ -43,6 +91,13 @@ export class RoomScene extends Phaser.Scene {
     for (const def of FURNITURE) {
       const furniture = new Furniture(this, def);
       if (def.solid) solids.add(furniture);
+      if (def.opens === 'terminal') {
+        this.interaction.add({
+          bounds: furniture.getBounds(),
+          hint: 'ТЕРМИНАЛ',
+          interact: () => this.setMode('terminal'),
+        });
+      }
     }
     this.physics.add.collider(this.player, solids);
   }

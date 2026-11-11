@@ -6,6 +6,7 @@ import { VIEW_H, VIEW_W } from './data/config';
 import { DB32, css } from './data/palette';
 import { BootScene } from './scenes/BootScene';
 import { RoomScene } from './scenes/RoomScene';
+import { UIScene } from './scenes/UIScene';
 import { FONT_FAMILY } from './ui/theme';
 
 /**
@@ -70,7 +71,8 @@ async function start(): Promise<void> {
     // Управление только с клавиатуры.
     input: { mouse: false, touch: false, gamepad: false },
     physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 } } },
-    scene: [BootScene, RoomScene],
+    // Порядок важен: сцены рисуются по очереди, интерфейс — последним, поверх мира.
+    scene: [BootScene, RoomScene, UIScene],
   });
 
   const fit = (): void => fitCanvas(game);

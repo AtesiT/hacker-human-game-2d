@@ -42,6 +42,11 @@ export function css(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
 
+/** 0xRRGGBB + прозрачность → 'rgba(r, g, b, a)'. */
+export function cssAlpha(color: number, alpha: number): string {
+  return `rgba(${(color >> 16) & 0xff}, ${(color >> 8) & 0xff}, ${color & 0xff}, ${alpha})`;
+}
+
 /** Светлый ли цвет: по этому выбирается тёмный или белый текст поверх него. */
 export function isLight(color: number): boolean {
   const r = (color >> 16) & 0xff;
