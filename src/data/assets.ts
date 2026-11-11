@@ -13,7 +13,8 @@ export type AssetKey =
   | 'couch'
   | 'fridge'
   | 'rug'
-  | 'rack';
+  | 'rack'
+  | 'farm';
 
 export interface AssetDef {
   /** Размер одного кадра в пикселях. */
@@ -71,6 +72,7 @@ export const ASSETS: Record<AssetKey, AssetDef> = {
 
   // Устройства из магазина. Размер кадра задаёт и место на полу: 16×32 — это 1×2 тайла.
   rack: { frameW: 16, frameH: 32, colors: [DB32.opal, DB32.christi], label: 'СТОЙКА' },
+  farm: { frameW: 32, frameH: 32, colors: [DB32.tahitiGold, DB32.oiledCedar], label: 'ФЕРМА' },
 };
 
 /** Сколько тайлов ассет занимает на полу: 48×32 px — это 3×2 тайла. */
