@@ -34,6 +34,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
+  /** Хитбокс в координатах мира. */
+  hitbox(): Phaser.Geom.Rectangle {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    return new Phaser.Geom.Rectangle(body.x, body.y, body.width, body.height);
+  }
+
   /**
    * Задаёт движение на текущий кадр.
    * @param dx, dy направление: −1, 0 или 1 по каждой оси; оба нуля — стоять

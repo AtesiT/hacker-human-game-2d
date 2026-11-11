@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { VIEW_H, VIEW_W } from '../data/config';
-import { DB32 } from '../data/palette';
+import { DB32, css } from '../data/palette';
 import { money } from './format';
 import { TEXT_BACKING, UI, UI_DEPTH, textStyle } from './theme';
 
@@ -22,6 +22,8 @@ export class Hud {
   private readonly hint: Phaser.GameObjects.Text;
   /** Какие строки столбика уведомлений сейчас заняты. */
   private readonly noteRows: boolean[] = [];
+  /** Что сейчас показано в подсказке: по этому ключу видно, изменилась ли она. */
+  private hintKey = '';
 
   constructor(private readonly scene: Phaser.Scene) {
     this.money = this.label(MARGIN, MARGIN, UI.accent);
@@ -55,8 +57,13 @@ export class Hud {
   }
 
   /** Подсказка внизу экрана. Пустая строка её убирает. */
-  setHint(text: string): void {
-    this.hint.setText(text).setVisible(text !== '');
+  setHint(text: string, color: number = DB32.white): void {
+    // Метод вызывается каждый кадр, а перерисовка текста стоит дорого,
+    // поэтому текст и цвет меняются, только когда они действительно другие.
+    const key = `${color}:${text}`;
+    if (key === this.hintKey) return;
+    this.hintKey = key;
+    this.hint.setColor(css(color)).setText(text).setVisible(text !== '');
   }
 
   /** Текст на тёмной подложке — так он читается поверх любого места комнаты. */

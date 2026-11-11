@@ -1,26 +1,36 @@
 import Phaser from 'phaser';
+import { tilesOf } from '../data/assets';
 import { START_MONEY, TILE, ZOOM } from '../data/config';
+import { DEVICES, type DeviceKind } from '../data/devices';
 import { FURNITURE, ROOM_COLS, ROOM_MAP, ROOM_ROWS, SPAWN, TILE_FLOOR, TILE_WALL } from '../data/room';
+import { Device } from '../entities/Device';
 import { Furniture } from '../entities/Furniture';
 import { Player } from '../entities/Player';
+import { BuildMode } from '../systems/BuildMode';
 import { Controls, type Action } from '../systems/Controls';
 import { Economy } from '../systems/Economy';
+import { Grid } from '../systems/Grid';
 import { Interaction } from '../systems/Interaction';
 import { signedMoney } from '../ui/format';
 import type { Hud } from '../ui/Hud';
+import { shopTab } from '../ui/tabs';
 import type { Terminal } from '../ui/Terminal';
 import { UI } from '../ui/theme';
 import type { UIScene } from './UIScene';
 
-/** Чем сейчас управляют клавиши: ходьбой или окном терминала. */
-type Mode = 'walk' | 'terminal';
+/** Чем сейчас управляют клавиши: ходьбой, окном терминала или расстановкой устройства. */
+type Mode = 'walk' | 'terminal' | 'build';
 
 /** Игровой мир: комната и всё, что в ней находится. Здесь же связаны системы игры. */
 export class RoomScene extends Phaser.Scene {
+  private build!: BuildMode;
   private controls!: Controls;
   private economy!: Economy;
+  private grid!: Grid;
   private interaction!: Interaction;
   private player!: Player;
+  /** Всё, сквозь что игрок не проходит: сплошная мебель и устройства. */
+  private solids!: Phaser.Physics.Arcade.StaticGroup;
   private hud!: Hud;
   private terminal!: Terminal;
   private mode: Mode = 'walk';
@@ -34,10 +44,6 @@ export class RoomScene extends Phaser.Scene {
     const ui = this.scene.get('UI') as UIScene;
     this.hud = ui.hud;
     this.terminal = ui.terminal;
-    this.terminal.setTabs([
-      { title: 'МАГАЗИН', verb: 'КУПИТЬ', rows: () => [] },
-      { title: 'ЗАКАЗЫ', verb: 'ВЗЯТЬ', rows: () => [] },
-    ]);
 
     this.economy = new Economy(START_MONEY, (money, delta) => {
       this.hud.setMoney(money);
@@ -50,40 +56,98 @@ export class RoomScene extends Phaser.Scene {
     this.mode = 'walk';
     this.controls = new Controls(this, (action) => this.onAction(action));
     this.interaction = new Interaction(this);
+    this.grid = new Grid();
     this.player = new Player(this, SPAWN.x, SPAWN.y);
+    this.build = new BuildMode(this, this.grid, this.player);
     this.createRoom();
     this.setupCamera();
+
+    this.terminal.setTabs([
+      shopTab(this.economy, (kind) => this.startBuild(kind)),
+      { title: 'ЗАКАЗЫ', verb: 'ВЗЯТЬ', rows: () => [] },
+    ]);
   }
 
   override update(_time: number, delta: number): void {
     this.controls.update(delta);
+    this.economy.update(delta);
 
     const walking = this.mode === 'walk';
     const dir = walking ? this.controls.direction() : { x: 0, y: 0 };
     this.player.move(dir.x, dir.y);
 
-    if (walking) this.interaction.update(this.player.x, this.player.y);
-    else this.interaction.clear();
-    const target = this.interaction.target;
-    this.hud.setHint(target ? `[E] ${target.hint}` : '');
+    this.updateInteraction();
+    this.updateHint();
   }
 
   /** Одно нажатие клавиши. Что оно значит, зависит от режима. */
   private onAction(action: Action): void {
-    if (this.mode === 'walk') {
-      if (action === 'confirm') this.interaction.target?.interact();
-    } else if (action === 'cancel') {
-      this.setMode('walk');
-    } else {
-      this.terminal.handle(action);
+    switch (this.mode) {
+      case 'walk':
+        if (action === 'confirm') this.interaction.target?.interact();
+        break;
+      case 'terminal':
+        if (action === 'cancel') this.setMode('walk');
+        else this.terminal.handle(action);
+        break;
+      case 'build':
+        if (action === 'cancel') this.setMode('walk');
+        else if (action === 'confirm') this.placeDevice();
+        else this.build.handle(action);
+        break;
     }
   }
 
   private setMode(mode: Mode): void {
     this.mode = mode;
+    // Клавиша, зажатая в прошлом режиме, не должна сразу листать меню или двигать контур.
     this.controls.waitForRelease();
     if (mode === 'terminal') this.terminal.open();
     else this.terminal.close();
+    if (mode !== 'build') this.build.stop();
+    // Объект рядом с игроком ищется сразу, а не на следующем кадре:
+    // иначе E, нажатая сразу после Esc, ни на что бы не попала.
+    this.updateInteraction();
+  }
+
+  /** Подсветка и подсказка есть только при ходьбе: в меню и при расстановке E занята другим. */
+  private updateInteraction(): void {
+    if (this.mode === 'walk') this.interaction.update(this.player.x, this.player.y);
+    else this.interaction.clear();
+  }
+
+  private updateHint(): void {
+    if (this.mode === 'build') {
+      const problem = this.build.problem;
+      const text = `WASD - ДВИГАТЬ   ${problem ?? 'E - ПОСТАВИТЬ'}   ESC - ОТМЕНА`;
+      this.hud.setHint(text, problem ? UI.bad : undefined);
+    } else {
+      const target = this.interaction.target;
+      this.hud.setHint(target ? `[E] ${target.hint}` : '');
+    }
+  }
+
+  /** Покупка в магазине: сначала выбирается место, деньги списываются только при установке. */
+  private startBuild(kind: DeviceKind): void {
+    this.setMode('build');
+    this.build.start(kind);
+  }
+
+  /** Ставит устройство на выбранное место и списывает его цену. */
+  private placeDevice(): void {
+    if (this.build.problem) return;
+    const { kind, area } = this.build;
+    this.economy.add(-DEVICES[kind].price);
+    this.addDevice(kind, area.tx, area.ty);
+    this.setMode('walk');
+  }
+
+  private addDevice(kind: DeviceKind, tx: number, ty: number): Device {
+    const device = new Device(this, kind, tx, ty);
+    this.solids.add(device);
+    this.grid.occupy({ tx, ty, ...tilesOf(DEVICES[kind].asset) });
+    this.economy.devices.push(device);
+    return device;
   }
 
   private createRoom(): void {
@@ -95,14 +159,14 @@ export class RoomScene extends Phaser.Scene {
     if (!layer) throw new Error('Не удалось создать слой комнаты');
 
     // Столкновения — обычные AABB из Arcade Physics: игрок против тайлов стен
-    // и против неподвижных тел сплошной мебели.
+    // и против неподвижных тел сплошной мебели и устройств.
     layer.setCollision(TILE_WALL);
     this.physics.add.collider(this.player, layer);
 
-    const solids = this.physics.add.staticGroup();
+    this.solids = this.physics.add.staticGroup();
     for (const def of FURNITURE) {
       const furniture = new Furniture(this, def);
-      if (def.solid) solids.add(furniture);
+      if (def.solid) this.solids.add(furniture);
       if (def.opens === 'terminal') {
         this.interaction.add({
           bounds: furniture.getBounds(),
@@ -111,7 +175,7 @@ export class RoomScene extends Phaser.Scene {
         });
       }
     }
-    this.physics.add.collider(this.player, solids);
+    this.physics.add.collider(this.player, this.solids);
   }
 
   private setupCamera(): void {

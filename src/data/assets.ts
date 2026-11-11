@@ -1,3 +1,4 @@
+import { TILE } from './config';
 import { DB32 } from './palette';
 
 /** Ключ ассета: он же ключ текстуры в Phaser и имя файла спрайта. */
@@ -11,7 +12,8 @@ export type AssetKey =
   | 'shelf'
   | 'couch'
   | 'fridge'
-  | 'rug';
+  | 'rug'
+  | 'rack';
 
 export interface AssetDef {
   /** Размер одного кадра в пикселях. */
@@ -66,4 +68,13 @@ export const ASSETS: Record<AssetKey, AssetDef> = {
   couch: { frameW: 48, frameH: 16, colors: [DB32.clairvoyant, DB32.loulou], label: 'ДИВАН' },
   fridge: { frameW: 16, frameH: 16, colors: [DB32.lightSteelBlue, DB32.heather], label: 'ХОЛОД' },
   rug: { frameW: 64, frameH: 48, colors: [DB32.brown, DB32.loulou], label: 'КОВЁР' },
+
+  // Устройства из магазина. Размер кадра задаёт и место на полу: 16×32 — это 1×2 тайла.
+  rack: { frameW: 16, frameH: 32, colors: [DB32.opal, DB32.christi], label: 'СТОЙКА' },
 };
+
+/** Сколько тайлов ассет занимает на полу: 48×32 px — это 3×2 тайла. */
+export function tilesOf(key: AssetKey): { w: number; h: number } {
+  const { frameW, frameH } = ASSETS[key];
+  return { w: frameW / TILE, h: frameH / TILE };
+}
