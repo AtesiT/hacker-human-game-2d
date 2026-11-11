@@ -1,0 +1,46 @@
+# Публикует игру на GitHub Pages при каждом обновлении ветки main.
+# Один раз нужно включить Pages в настройках репозитория:
+# Settings → Pages → Build and deployment → Source: «GitHub Actions».
+name: Публикация на GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Кнопка «Run workflow» на вкладке Actions — запустить публикацию вручную.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Если пришло новое обновление, незаконченная публикация старого отменяется.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Собирает dist/index.html — всю игру одним файлом.
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
